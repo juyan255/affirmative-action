@@ -1,0 +1,275 @@
+#!usr/bin/perl -w
+use List::Util qw(max min);
+use POSIX qw(ceil floor);
+use Statistics::Distributions (uprob);
+
+
+sub normaldist {
+    my ($u1, $u2);  # uniformly distributed random numbers
+    my $w;          # variance, then a weight
+    my ($g1, $g2);  # gaussian-distributed numbers
+
+    do {
+        $u1 = 2 * rand() - 1;
+        $u2 = 2 * rand() - 1;
+        $w = $u1*$u1 + $u2*$u2;
+    } while ( $w >= 1 );
+
+    $w = sqrt( (-2 * log($w))  / $w );
+    $g2 = $u1 * $w;
+    $g1 = $u2 * $w;
+    # return both if wanted, else just one
+    return $g1;
+}
+$minimum_score = 540;
+$maximum_score = 700;
+$student_number = 5555;
+$score_mean = 470;
+$score_sd = 70;
+$school_number = 218;
+$schoolquota = 25;
+$big_major_preference_ratio = 0.9;
+$obey_ratio = 0.8;
+$extensionratio = 0; 
+$bigmajorshare = 0.8;
+@schooltype = map do{if($_ < 26){110}
+					 elsif($_ < 76){100}
+					 elsif($_ < 137){80}
+					 else{50}
+					 },
+					 (0..217);
+
+=sub genenvironment{
+	my $minimum_score = $_[0]?$_[0]:540;
+	my $maximum_score = $_[1]?$_[1]:700;
+	my $student_number = $_[2]?$_[2]:5555;
+	my $score_mean = $_[3]?$_[3]:470;
+	my $score_sd = $_[4]?$_[4]:70;
+	my $school_number = $_[5]?$_[5]:218;
+	my $schoolquota = $_[6]?$_[6]:25;
+	my @schooltype = $_[7]?@{$_[7]}:(map do{if($_ <= 26){110}
+					 elsif($_ <= 76){100}
+					 elsif($_ <= 137){80}
+					 else{50}
+					 },
+					 (1..218));
+	
+=cut
+sub gentype {
+    my $probability = shift ; 
+    my $temp = rand();
+    if($temp < $probability){
+        return 1;
+    }else{
+        return 0;
+    }
+}
+sub gentypestu {
+    my %type = ();
+    my $arg = shift;
+    for(my $i=0; $i < $student_number; $i++)
+    {
+        $type{$i} = &gentype($arg);
+    }
+    return \%type;
+}
+
+sub genscore {
+	my ($mu, $sigma) = @_;
+	my $score;
+	do {
+		$score = $mu + &normaldist * $sigma;
+	} while ( $score < $minimum_score or $score > $maximum_score);
+	return $score;
+}
+
+sub genscores {
+	my ($student_number, $score_mean, $score_sd) = @_;
+	my @studentlist=();
+	for( my $i=0; $i < $student_number; $i++)
+	{
+		$studentlist[$i] = &genscore($score_mean, $score_sd);
+	}
+	@studentlist = reverse sort @studentlist;
+   
+}
+
+
+
+sub genstudentpreference {
+	my $scores = shift;
+	my @currentschoolscore = map do{if($_ < 26){$scores->[26*$schoolquota]}
+					 elsif($_ < 76){$scores->[76*$schoolquota]}
+					 elsif($_ < 137){$scores->[137*$schoolquota]}
+					 else{$scores->[218*$schoolquota]}
+					 },
+					  (0..217);
+	
+	my %schoolexvalue = my %schoolvalue = ();
+	my %prob = my %studentpreference =();
+    for(my $i = 0; $i < $student_number; $i++)
+    {
+        for(my $j = 0; $j < $school_number; $j++) 
+        {
+	        my $temp = ($scores->[$i] - $currentschoolscore[$j]);
+            $prob{$i}[$j]=1 - uprob ($temp);
+            $schoolvalue{$i}[$j] = $schooltype[$j] + 5 * &normaldist;
+            $schoolexvalue{$i}[$j] = $prob{$i}[$j] * $schoolvalue{$i}[$j];
+            
+        }
+    }
+    for(my $i = 0; $i < $student_number; $i++)
+    {
+        @{$studentpreference{$i}} = sort {$schoolexvalue{$i}[$b]<=>$schoolexvalue{$i}[$a]} (0..$school_number-1)#map $_->[1],sort { $b->[0] <=> $a->[0]} map [(split(':',$_))[0,1]], @{$schoolexvalue{$i}};Schwartzian Transform   
+    }
+    return \%studentpreference;    
+    
+}
+
+
+=for($i=0; $i< $student_number; $i++)
+{ 
+	@{$constrainedpreference{$i}}= @{$studentpreference->{$i}}[0..5];
+}
+=cut
+
+sub genenvironment {
+	@scores = &genscores($student_number, $score_mean, $score_sd);
+	$prtype = &gentypestu($big_major_preference_ratio);
+	$obtype = &gentypestu($obey_ratio);
+	$schoolpreference = \@scores;
+	$studentpreference = &genstudentpreference(\@scores);
+	
+}
+
+#the benchmark mechanism follows
+sub benchmark 
+{
+	my ($prtype, $obtype, $studentpreference, $schoolpreference) = @_;
+	
+	
+	my %assigned = my %gschoolquota = my %gschoolpreference = my %gstudentpreference  = my %schoolquota = my %extendedquota = my %candidates =();
+	
+	for(my $school=0; $school< $school_number; $school++)
+	{
+		$schoolquota{$school."s"} = POSIX::ceil($schoolquota * (1 - $bigmajorshare));
+		$schoolquota{$school} = POSIX::ceil($schoolquota * $bigmajorshare);
+		$extendedquota{$school} = ($schoolquota{$school."s"} + $schoolquota{$school}) * (1 + $extensionratio);
+	}
+	foreach my $student ( sort {$a <=> $b} keys %{$studentpreference})
+	{
+            for(my $i = 0; $i < 6; $i++) # @{$studentpreference->{$student}}; $i++)
+            {
+		        $schoolname = $studentpreference->{$student}[$i];
+		        if($extendedquota{$schoolname}>0)
+                {
+                    push @{$candidates{$schoolname}}, $student;
+                    $extendedquota{$schoolname}--;
+                    last;
+		        }
+            }
+	}
+	my %gcandidates = my %failtopass = ();
+	my @temp = ();
+	foreach my $school (keys %candidates)
+	{
+		$smallschool = $school."s";
+		foreach $candidate ( @{$candidates{$school}} )
+		{
+			if($prtype->{$candidate} == 1)
+			{ 
+					push @{$gcandidates{$school}}, $candidate;      
+			}
+			 else
+			{
+					push @{$gcandidates{$smallschool}}, $candidate;
+			}
+		}
+		$excessnum = @{$gcandidates{$school}}  - $schoolquota{$school};
+		$excessnumsmall = @{$gcandidates{$smallschool}}  - $schoolquota{$smallschool};
+		if($excessnum > 0 && $excessnumsmall > 0)
+		{
+			for($i=1; $i <= $excessnum; $i++)
+			{
+				push @failtopass, pop @{$gcandidates{$school}};
+			} 
+			for($i=1; $i <= $excessnumsmall; $i++)
+			{
+				push @failtopass, pop @{$gcandidates{$smallschool}};
+			} 
+		}
+		if($excessnum <0 && $excessnumsmall > 0)
+		{
+			for($i=1; $i <= $excessnumsmall; $i++)
+			{
+				push @temp, pop @{$gcandidates{$smallschool}};
+			}
+			push @failtopass, grep {$obtype->{$_} == 0} @temp;
+			@temp = reverse grep {$obtype->{$_} == 1} @temp;
+			
+					
+			$num = $#temp + 1;
+			for($i=1; $i <= $num && $i <= abs($excessnum); $i++)
+			{
+				push @{$gcandidates{$school}}, shift @temp;
+			}
+			push @failtopass, @temp;
+				
+		}
+		if($excessnumsmall <0 && $excessnum > 0)
+		{
+			for($i=1; $i <= $excessnum; $i++)
+			{
+				push @temp, pop @{$gcandidates{$school}};
+			}
+			push @failtopass, grep {$obtype->{$_} == 0} @temp;
+			@temp = reverse grep {$obtype->{$_} == 1} @temp;
+			
+			$num = $#temp + 1;
+			for($i=1; $i <= $num && $i <= abs($excessnumsmall); $i++)
+			{
+				push @{$gcandidates{$smallschool}}, shift @temp;
+			}
+			push @failtopass, @temp;
+				
+		}
+
+	}
+	return \%gcandidates;
+	#now the assignment comes
+	#finally
+=for(my $i=0; $i < keys %{$studentpreference}; $i++)
+	{
+		foreach my $j (keys %gcandidates)
+		{
+			if ( grep { $_ == $i } @{$gcandidates{$j}}) 
+			{
+
+				$assigned{$i}=$j;
+
+			} 
+
+		}
+	if (!exists $assigned{$i}){$assigned{$i}=10086;}
+	}	
+	return \%assigned;
+my @scorelevel = my %admit = ();
+	for($i = 0 ; $i < $school_number; $i++)
+	{
+		my $m = @{$gcandidates{$i}} ;
+		my $n = @{$gcandidates{$i."s"}};
+		if($m+$n >= ($schoolquota{$i} + $schoolquota{$i."s"}) )
+		{
+			$scorelevel[$i] = $Environment::scores->[List::Util::max (@{$gcandidates{$i}}, @{$gcandidates{$i."s"}})];
+		}else
+		{
+			$scorelevel[$i] = $Environment::minimum_score;
+		}
+	}
+	return [\%gcandidates, \@scorelevel];
+=cut		
+}
+&genenvironment();
+$result = &benchmark($prtype, $obtype, $studentpreference, $schoolpreference);
+foreach (0..$school_number-1)
+{	print "$_ admits @{$result->{$_}}\n ${_}s admits @{$result->{$_.'s'}}\n";}

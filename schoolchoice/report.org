@@ -1,0 +1,20 @@
+
+#+begin_src R 
+  ## Edit Your R Code Here.
+  library(DAAG)
+  seal.lung<-cfseal$lung
+  seal.lung
+  Cars93.summary 
+  library(lattice)
+  xyplot(Brainwt~Bodywt, data=primates)
+trellis.device(color=FALSE)
+here <- ais$sport %in% c("Row","Swim")
+xyplot(ht~wt | sport, groups=sex, pch=c(4,1), aspect=1,auto.key=list(columns=2), subset=here, data=ais)
+
+
+#+end_src
+
+#+RESULTS:
+
+
+
