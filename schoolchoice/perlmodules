@@ -1,0 +1,5 @@
+Statistics::Distributions
+Excel::Writer::XLSX
+Spreadsheet::Read
+Spreadsheet::ParseExcel
+Spreadsheet::XLSX
